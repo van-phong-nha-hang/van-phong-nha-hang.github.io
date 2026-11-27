@@ -233,18 +233,13 @@ function staffCompareReport(draft,report){
 }
 function Bc(e,t){return e.map(e=>({...e,support:t.filter(t=>t.source_id===e.outlet_id),incoming:t.filter(t=>(t.destination_id===e.outlet_id||t.destination_id===e.partnerId)&&t.status===`confirmed`)}))}function Vc(e,t,n,r,i,admin){
   const editableDay = admin || [Ks(R(),-1), R(), Ks(R(),1)].includes(n);
-  const afterCutoff = Date.now() >= Xs(n);
   const missingHeadcount = n >= Rs && !t?.headcount;
   const canEdit = editableDay && !missingHeadcount;
   const readOnly = !canEdit || (t?.submitted_at && !r);
   const status = !editableDay ? `Chỉ xem. Bạn có thể điều chỉnh báo cáo của hôm qua, hôm nay và ngày mai.`
-    : missingHeadcount ? `Nhà hàng chưa có số theo dõi nhân sự. Liên hệ Admin để bổ sung trước khi gửi.`
-    : !admin && R() === `2026-11-27` && n === R() ? `Ngày 27/11 được chỉnh sửa trực tiếp.`
-    : !admin && R() >= `2026-11-28` && afterCutoff ? `Đã qua 09h00. Báo cáo gửi lúc này cần Admin duyệt.`
-    : !admin ? `Gửi trước 17h00 ngày hôm trước để đúng hạn. Từ 09h00 ngày đi làm, báo cáo cần Admin duyệt.` : ``;
+    : missingHeadcount ? `Nhà hàng chưa có số theo dõi nhân sự. Liên hệ Admin để bổ sung trước khi gửi.` : ``;
   let a=t?.rows?.length?t.rows:yc(e),o=t?.support||[],allocate=H(staffIncomingTotal(t))>0;return`<h2>${U(t?.group?.label||staffReportRestaurant(e.name))}</h2>
     ${status?`<p role="status">${status}</p>`:``}
-    ${t?.submitted_at?`<p>Đã gửi lúc ${U(Zs(t.submitted_at))}.</p>`:`<p>Chưa gửi báo cáo.</p>`}
     ${canEdit&&readOnly?`<button type="button" class="button secondary" id="staff-report-edit">Chỉnh sửa báo cáo</button>`:``}
     <form id="staff-entry" class="${readOnly?`staff-entry-readonly`:``}">
     <fieldset class="staff-entry-fields"${readOnly?` disabled`:``}>
