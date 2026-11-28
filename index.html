@@ -319,7 +319,32 @@ ${metrics.map(metric => renderStaffMetricDetail(metric,e,t)).join("")}
     ${Hc(`Tỷ trọng nghỉ OFF`,i)}
     <section class="panel"><header class="panel-head"><div><h2>Tiến độ báo nhân sự theo outlet</h2>
       </div></header>
-      ${a?`<div class="table-scroll"><table><thead><tr><th scope="col">Outlet</th><th scope="col">Trạng thái</th><th scope="col">Giờ gửi</th><th scope="col">Đi làm</th><th scope="col">Nghỉ OFF</th><th scope="col">Số theo dõi</th><th scope="col">Chi tiết</th></tr></thead><tbody>${a}</tbody></table></div>`:`<p class="empty">Chưa có outlet trong phạm vi được cấp.</p>`}</section>`}function Wc(e,t){let n=URL.createObjectURL(e),r=document.createElement(`a`);r.href=n,r.download=`Bao_nhan_su_${t}.png`,r.click(),setTimeout(()=>URL.revokeObjectURL(n),1e3)}function Gc(){return`<div id="staffing" aria-busy="true"><p>Đang tải báo cáo…</p></div>`}async function openStaffApprovals(outlets, refresh) {
+      ${a?`<div class="table-scroll"><table><thead><tr><th scope="col">Outlet</th><th scope="col">Trạng thái</th><th scope="col">Giờ gửi</th><th scope="col">Đi làm</th><th scope="col">Nghỉ OFF</th><th scope="col">Số theo dõi</th><th scope="col">Chi tiết</th></tr></thead><tbody>${a}</tbody></table></div>`:`<p class="empty">Chưa có outlet trong phạm vi được cấp.</p>`}</section>`}function Wc(e,t){let n=URL.createObjectURL(e),r=document.createElement(`a`);r.href=n,r.download=`Bao_nhan_su_${t}.png`,r.click(),setTimeout(()=>URL.revokeObjectURL(n),1e3)}function Gc(){return`<div id="staffing" aria-busy="true"><p>Đang tải báo cáo…</p></div>`}function staffRevisionChanges(before, after, nameFor) {
+  const changes = [];
+  function compare(label, oldCounts, newCounts) {
+    Ls.forEach((group, index) => {
+      const previous = Number(oldCounts?.[index] ?? 0);
+      const next = Number(newCounts?.[index] ?? 0);
+      const delta = next - previous;
+      if (!delta) return;
+      const direction = delta > 0 ? 'tăng' : 'giảm';
+      changes.push('<li><strong>' + U(label) + ' · ' + group + '</strong> <span class="revision-' + (delta > 0 ? 'increase' : 'decrease') + '">' + previous + ' → ' + next + ' (' + direction + ' ' + Math.abs(delta) + ')</span></li>');
+    });
+  }
+  function compareRows(oldRows, newRows, key, labelFor, fields) {
+    const oldByKey = new Map(oldRows.map(row => [row[key], row]));
+    const newByKey = new Map(newRows.map(row => [row[key], row]));
+    for (const id of new Set([...oldByKey.keys(), ...newByKey.keys()])) {
+      for (const [field, label] of fields) compare(labelFor(id) + ' · ' + label, oldByKey.get(id)?.[field], newByKey.get(id)?.[field]);
+    }
+  }
+  compareRows(before.rows || [], after.rows || [], 'name', name => name, [['work','Đi làm'],['received','Hỗ trợ nhận']]);
+  compare('Nghỉ OFF', before.off, after.off);
+  compareRows(before.support || [], after.support || [], 'destination_id', nameFor, [['counts','Đi hỗ trợ']]);
+  if ((before.note || '') !== (after.note || '')) changes.push('<li><strong>Ghi chú</strong> · ' + U(before.note || 'Trống') + ' → ' + U(after.note || 'Trống') + '</li>');
+  return changes.length ? '<h4>Chi tiết điều chỉnh</h4><ul>' + changes.join('') + '</ul>' : '<p>Không có thay đổi so với báo cáo đã lưu.</p>';
+}
+async function openStaffApprovals(outlets, refresh) {
   const dialog = document.createElement("dialog");
   dialog.className = "staff-metric-dialog";
   dialog.setAttribute("aria-labelledby", "staff-revision-title");
@@ -336,11 +361,21 @@ ${metrics.map(metric => renderStaffMetricDetail(metric,e,t)).join("")}
     if (error) throw Error(error.message);
     const requests = data || [];
     status.textContent = requests.length ? `${requests.length} yêu cầu đang chờ duyệt` : "Không có yêu cầu đang chờ duyệt.";
+    const savedByDay = new Map(await Promise.all([...new Set(requests.map(request => request.day))].map(async day => {
+      try {
+        const [reports, transfers] = await Promise.all([L.rpc('staffing_report_with_headcount',{report_day:day}), ms(day)]);
+        return [day, reports.error ? null : {reports:reports.data || [], transfers}];
+      } catch { return [day,null]; }
+    })));
     list.innerHTML = requests.map(({id,day,name,payload}) => {
+      const saved = savedByDay.get(day);
+      const previous = saved?.reports.find(row => String(row.outlet_name).toLocaleLowerCase('vi') === String(name).toLocaleLowerCase('vi'));
+      const baseline = previous?.submitted_at ? {...previous, support:saved.transfers.filter(row => row.source_id === previous.outlet_id && row.status !== 'cancelled')} : {};
+      const comparison = !saved || !previous ? '<p>Chưa tải được bản đã lưu để đối chiếu.</p>' : (previous.submitted_at ? '' : '<p>Báo cáo lần đầu. Số cũ tính từ 0.</p>') + staffRevisionChanges(baseline,payload || {},nameFor);
       const report = payload || {};
       const work = (report.rows || []).map(row => `<li><strong>${U(row.name)}</strong> · Đi làm ${counts(row.work)}${H(Vs(row.received)) ? ` · Hỗ trợ nhận ${counts(row.received)}` : ""}</li>`).join("");
       const support = (report.support || []).map(row => `<li>${U(nameFor(row.destination_id))} · ${counts(row.counts)}</li>`).join("");
-      return `<section class="panel" data-revision="${U(id)}"><h3>${U(name)} · ${U(Gs(day))}</h3><ul>${work}</ul><p>Nghỉ OFF · ${counts(report.off)}</p>${support ? `<p>Đưa nhân sự đi hỗ trợ</p><ul>${support}</ul>` : ""}${report.note ? `<p>Ghi chú · ${U(report.note)}</p>` : ""}<div class="actions"><button type="button" class="button primary" data-revision-action="approve">Duyệt</button> <button type="button" class="button secondary" data-revision-action="reject">Từ chối</button></div></section>`;
+      return `<section class="panel" data-revision="${U(id)}"><h3>${U(name)} · ${U(Gs(day))}</h3>${comparison}<h4>Số liệu đề xuất</h4><ul>${work}</ul><p>Nghỉ OFF · ${counts(report.off)}</p>${support ? `<p>Đưa nhân sự đi hỗ trợ</p><ul>${support}</ul>` : ""}${report.note ? `<p>Ghi chú · ${U(report.note)}</p>` : ""}<div class="actions"><button type="button" class="button primary" data-revision-action="approve">Duyệt</button> <button type="button" class="button secondary" data-revision-action="reject">Từ chối</button></div></section>`;
     }).join("");
   } catch (error) { status.textContent = error.message; }
   list.onclick = async event => {
@@ -1212,6 +1247,8 @@ body { background: linear-gradient(135deg, #f1f3f2, #dfe4e2); }
 .staff-restaurant-breakdown dd { margin: 0; font-weight: 700; white-space: nowrap; }
 .staff-restaurant-breakdown dt i { display: inline-block; width: .65em; height: .65em; margin-right: .38em; border-radius: 50%; background: var(--group-color); }
 #staff-revision-count:not([hidden]) { display:inline-grid; place-items:center; min-width:1.35em; padding:0 .32em; border-radius:999px; background:#b42318; color:#fff; font-size:.85em; font-weight:800; margin-inline-start:.3em; }
+.revision-increase { color:#17643b; font-weight:800; }
+.revision-decrease { color:#aa221c; font-weight:800; }
 </style>
 </head>
 <body>
