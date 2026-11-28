@@ -1,4 +1,5 @@
 const messages = {
+  reminder: 'Chưa báo nhân sự ngày mai. Vui lòng gửi trước 17h00.',
   support: 'Có yêu cầu nhận hỗ trợ nhân sự. Mở app để xác nhận.',
   approval: 'Có yêu cầu điều chỉnh nhân sự. Mở app để duyệt.'
 };
