@@ -1,0 +1,10 @@
+{
+  "id": "/",
+  "name": "Văn phòng Nhà hàng",
+  "short_name": "Văn phòng NH",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#eef1ef",
+  "theme_color": "#132b26"
+}
